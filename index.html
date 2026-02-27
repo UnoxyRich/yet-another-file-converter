@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WASM File Converter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-shape shape-a"></div>
+  <div class="bg-shape shape-b"></div>
+
+  <main class="app">
+    <header class="hero">
+      <p class="kicker">Client-side conversion</p>
+      <h1>WASM File Converter</h1>
+      <p class="subtitle">Convert files in your browser using <strong>FFmpeg.wasm</strong> and <strong>ImageMagick WASM</strong>. Nothing is uploaded to a server.</p>
+    </header>
+
+    <section class="panel">
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <input id="fileInput" type="file" />
+        <span class="drop-title">Drop a file here or click to browse</span>
+        <span class="drop-sub">Best for image, audio, and video conversions</span>
+      </label>
+
+      <div class="form-grid">
+        <label>
+          <span>Output format</span>
+          <select id="formatSelect"></select>
+        </label>
+
+        <label>
+          <span>Engine</span>
+          <select id="engineSelect">
+            <option value="auto">Auto (recommended)</option>
+            <option value="ffmpeg">FFmpeg.wasm</option>
+            <option value="imagemagick">ImageMagick WASM</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="convertBtn" type="button" disabled>Convert</button>
+        <a id="downloadBtn" class="download hidden" download>Download</a>
+      </div>
+
+      <div class="progress-wrap hidden" id="progressWrap">
+        <div class="progress-bar"><div id="progressBar"></div></div>
+        <p id="progressText">Preparing...</p>
+      </div>
+
+      <pre id="log" class="log">Select a file to start.</pre>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.2/dist/umd/index.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
