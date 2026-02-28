@@ -119,14 +119,30 @@ async function ensureFfmpeg() {
     setProgress(percent, `FFmpeg running: ${percent}%`);
   });
 
-  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
-  setProgress(5, "Loading FFmpeg core...");
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
-  });
+  const coreSources = [
+    "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd",
+    "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd"
+  ];
 
-  ffmpegLoaded = true;
+  setProgress(5, "Loading FFmpeg core...");
+
+  let lastError = null;
+  for (const baseURL of coreSources) {
+    try {
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript")
+      });
+
+      ffmpegLoaded = true;
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(`Unable to load FFmpeg WebAssembly core. ${lastError?.message || "Unknown error."}`);
 }
 
 async function ensureImagemagick() {
