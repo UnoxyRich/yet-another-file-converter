@@ -62,6 +62,23 @@ function extensionFromName(name) {
   return (name.split(".").pop() || "").toLowerCase();
 }
 
+function errorMessage(error) {
+  if (!error) {
+    return "Unknown error.";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error.message) {
+    return error.message;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch (_) {
+    return String(error);
+  }
+}
+
 function categoryForFile(file) {
   if (!file) {
     return "unknown";
@@ -119,29 +136,36 @@ async function ensureFfmpeg() {
     setProgress(percent, `FFmpeg running: ${percent}%`);
   });
 
-  const coreSources = [
-    "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd",
-    "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd"
+  const ffmpegSources = [
+    {
+      coreBaseURL: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm"
+    },
+    {
+      coreBaseURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
+    }
   ];
+  const classWorkerURL = new URL("./vendor/ffmpeg/worker.js", window.location.href).toString();
 
   setProgress(5, "Loading FFmpeg core...");
 
   let lastError = null;
-  for (const baseURL of coreSources) {
+  for (const source of ffmpegSources) {
     try {
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
+        classWorkerURL,
+        coreURL: await toBlobURL(`${source.coreBaseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${source.coreBaseURL}/ffmpeg-core.wasm`, "application/wasm")
       });
 
       ffmpegLoaded = true;
       return;
     } catch (error) {
       lastError = error;
+      console.error("FFmpeg load failed for source", source.coreBaseURL, error);
     }
   }
 
-  throw new Error(`Unable to load FFmpeg WebAssembly core. ${lastError?.message || "Unknown error."}`);
+  throw new Error(`Unable to load FFmpeg WebAssembly core. ${errorMessage(lastError)}`);
 }
 
 async function ensureImagemagick() {
