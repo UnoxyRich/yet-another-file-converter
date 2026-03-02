@@ -39,6 +39,12 @@ let ffmpeg = null;
 let ffmpegLoaded = false;
 let imagemagickLoaded = false;
 let magickApi = null;
+const ffmpegRuntime = {
+  mode: "single",
+  threads: 1,
+  source: null,
+  note: null
+};
 
 function log(message) {
   logEl.textContent = message;
@@ -77,6 +83,39 @@ function errorMessage(error) {
   } catch (_) {
     return String(error);
   }
+}
+
+function preferredThreadCount() {
+  const cores = Number(window.navigator?.hardwareConcurrency) || 1;
+  return Math.max(1, Math.min(cores, 16));
+}
+
+function ffmpegLoadSources() {
+  const cdnRoots = [
+    "https://unpkg.com",
+    "https://cdn.jsdelivr.net/npm"
+  ];
+  const version = "0.12.10";
+  const canUseMultiThread = window.crossOriginIsolated === true;
+
+  const sources = [];
+  if (canUseMultiThread) {
+    for (const cdnRoot of cdnRoots) {
+      sources.push({
+        label: `${cdnRoot} core-mt`,
+        coreBaseURL: `${cdnRoot}/@ffmpeg/core-mt@${version}/dist/esm`,
+        multithread: true
+      });
+    }
+  }
+  for (const cdnRoot of cdnRoots) {
+    sources.push({
+      label: `${cdnRoot} core`,
+      coreBaseURL: `${cdnRoot}/@ffmpeg/core@${version}/dist/esm`,
+      multithread: false
+    });
+  }
+  return { sources, canUseMultiThread };
 }
 
 function categoryForFile(file) {
@@ -136,14 +175,7 @@ async function ensureFfmpeg() {
     setProgress(percent, `FFmpeg running: ${percent}%`);
   });
 
-  const ffmpegSources = [
-    {
-      coreBaseURL: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm"
-    },
-    {
-      coreBaseURL: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-    }
-  ];
+  const { sources: ffmpegSources, canUseMultiThread } = ffmpegLoadSources();
   const classWorkerURL = new URL("./vendor/ffmpeg/worker.js", window.location.href).toString();
 
   setProgress(5, "Loading FFmpeg core...");
@@ -151,13 +183,28 @@ async function ensureFfmpeg() {
   let lastError = null;
   for (const source of ffmpegSources) {
     try {
-      await ffmpeg.load({
+      const loadConfig = {
         classWorkerURL,
         coreURL: await toBlobURL(`${source.coreBaseURL}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${source.coreBaseURL}/ffmpeg-core.wasm`, "application/wasm")
+      };
+      if (source.multithread) {
+        loadConfig.workerURL = await toBlobURL(`${source.coreBaseURL}/ffmpeg-core.worker.js`, "text/javascript");
+      }
+
+      await ffmpeg.load({
+        ...loadConfig
       });
 
       ffmpegLoaded = true;
+      ffmpegRuntime.mode = source.multithread ? "multi" : "single";
+      ffmpegRuntime.threads = source.multithread ? preferredThreadCount() : 1;
+      ffmpegRuntime.source = source.label;
+      if (!canUseMultiThread) {
+        ffmpegRuntime.note = "Single-thread runtime (crossOriginIsolated is disabled, so FFmpeg multi-thread core cannot run).";
+      } else {
+        ffmpegRuntime.note = null;
+      }
       return;
     } catch (error) {
       lastError = error;
@@ -204,12 +251,24 @@ async function convertWithFfmpeg(file, outName) {
   await ensureFfmpeg();
   const { fetchFile } = window.FFmpegUtil;
 
+  if (ffmpegRuntime.note && !logEl.textContent.includes(ffmpegRuntime.note)) {
+    log(`${logEl.textContent}\nRuntime: ${ffmpegRuntime.note}`);
+  }
+
   const inName = file.name;
   setProgress(10, "Reading input file...");
   await ffmpeg.writeFile(inName, await fetchFile(file));
 
-  setProgress(18, "Converting with FFmpeg...");
-  await ffmpeg.exec(["-i", inName, outName]);
+  const ffmpegArgs = [
+    "-threads",
+    String(ffmpegRuntime.threads),
+    "-i",
+    inName,
+    outName
+  ];
+
+  setProgress(18, `Converting with FFmpeg (${ffmpegRuntime.mode}-thread, ${ffmpegRuntime.threads} thread${ffmpegRuntime.threads === 1 ? "" : "s"})...`);
+  await ffmpeg.exec(ffmpegArgs);
 
   const data = await ffmpeg.readFile(outName);
   try {
