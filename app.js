@@ -255,7 +255,10 @@ async function convertWithFfmpeg(file, outName) {
     log(`${logEl.textContent}\nRuntime: ${ffmpegRuntime.note}`);
   }
 
-  const inName = file.name;
+  const outputExt = extensionFromName(outName) || "bin";
+  const inputExt = extensionFromName(file.name);
+  const inName = `input${inputExt ? `.${inputExt}` : ""}`;
+  const ffmpegOutName = `output.${outputExt}`;
   setProgress(10, "Reading input file...");
   await ffmpeg.writeFile(inName, await fetchFile(file));
 
@@ -264,16 +267,16 @@ async function convertWithFfmpeg(file, outName) {
     String(ffmpegRuntime.threads),
     "-i",
     inName,
-    outName
+    ffmpegOutName
   ];
 
   setProgress(18, `Converting with FFmpeg (${ffmpegRuntime.mode}-thread, ${ffmpegRuntime.threads} thread${ffmpegRuntime.threads === 1 ? "" : "s"})...`);
   await ffmpeg.exec(ffmpegArgs);
 
-  const data = await ffmpeg.readFile(outName);
+  const data = await ffmpeg.readFile(ffmpegOutName);
   try {
     await ffmpeg.deleteFile(inName);
-    await ffmpeg.deleteFile(outName);
+    await ffmpeg.deleteFile(ffmpegOutName);
   } catch (_) {
   }
   return data;
